@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+from fastapi import FastAPI, HTTPException, Query, status
+
+from core.graph_builder import GraphBuilder
+from core.neo4j_client import Neo4jClient
+
+app = FastAPI(title='Cross-Repo API', version='0.1.0')
+
+
+def _get_neo4j() -> Neo4jClient:
+    return Neo4jClient()
+
+
+@app.get('/health')
+async def health() -> dict:
+    try:
+        neo4j = _get_neo4j()
+        stats = neo4j.stats()
+        neo4j.close()
+        return {'status': 'ok', 'graph_stats': stats}
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+
+
+@app.post('/build-graph')
+async def build_graph() -> dict:
+    """Trigger a full graph rebuild from all Qdrant indexed data."""
+    builder = GraphBuilder()
+    try:
+        stats = builder.build()
+        return {'status': 'ok', 'stats': stats}
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    finally:
+        builder.close()
+
+
+@app.get('/endpoints')
+async def list_endpoints(repo_name: str | None = Query(default=None)) -> dict:
+    """List all discovered API endpoints and their frontend→backend mappings."""
+    neo4j = _get_neo4j()
+    try:
+        results = neo4j.query_all_endpoints(repo_name)
+        return {'repo_name': repo_name, 'count': len(results), 'endpoints': results}
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    finally:
+        neo4j.close()
+
+
+@app.get('/trace')
+async def trace_feature(
+    feature: str = Query(..., description='Plain-English feature name to trace (e.g. beneficiary registration)'),
+) -> dict:
+    """Trace the full frontend→backend service chain for a feature."""
+    neo4j = _get_neo4j()
+    try:
+        results = neo4j.query_trace(feature)
+        if not results:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'No endpoints found matching feature: {feature}',
+            )
+        return {'feature': feature, 'count': len(results), 'traces': results}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    finally:
+        neo4j.close()
+
+
+@app.get('/dependencies/{class_name}')
+async def get_dependencies(
+    class_name: str,
+    repo_name: str | None = Query(default=None),
+) -> dict:
+    """Return the dependency chain for a given class."""
+    neo4j = _get_neo4j()
+    try:
+        results = neo4j.query_dependencies(class_name, repo_name)
+        if not results:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f'Class not found: {class_name}',
+            )
+        return {'class_name': class_name, 'results': results}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    finally:
+        neo4j.close()
+
+
+if __name__ == '__main__':
+    import uvicorn
+    from config import get_settings
+    uvicorn.run('api:app', host='0.0.0.0', port=get_settings().cross_repo_port, reload=True)
