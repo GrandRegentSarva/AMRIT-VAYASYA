@@ -1,0 +1,452 @@
+# AMRIT Docs MCP - Engineering Rules
+
+## System Identity
+
+This project is an enterprise-grade Docs MCP platform focused on:
+
+* documentation intelligence
+* repository understanding
+* hybrid retrieval
+* endpoint tracing
+* architecture reasoning
+* SDLC-aware developer assistance
+
+This is NOT:
+
+* a generic chatbot
+* a PDF Q&A app
+* a frontend-heavy AI product
+* an experimental agent framework
+
+The system must optimize for:
+
+* retrieval quality
+* traceability
+* explainability
+* maintainability
+* developer usefulness
+
+---
+
+# Core Architectural Principle
+
+The platform is built around this pipeline:
+
+Repo/docs ingestion
+↓
+Docling + Tree-sitter parsing
+↓
+Metadata enrichment
+↓
+Semantic chunking
+↓
+Embeddings
+↓
+Qdrant indexing
+↓
+Hybrid retrieval
+↓
+Reranking
+↓
+FastMCP tools
+↓
+LLM orchestration
+
+Do not violate or bypass this flow.
+
+Avoid hidden shortcuts or tightly coupled logic.
+
+---
+
+# Primary Engineering Goal
+
+The PRIMARY differentiator is:
+
+Cross-repo code understanding.
+
+Every implementation decision should support:
+
+* endpoint tracing
+* dependency understanding
+* API flow explanation
+* repository relationships
+* contextual reasoning
+
+The system should eventually answer questions like:
+
+* “Which backend endpoint does beneficiary registration call?”
+* “Which service handles this API?”
+* “What repositories are affected if this controller changes?”
+* “What is the flow from frontend action to DB layer?”
+
+This is more important than UI polish or generalized AI features.
+
+---
+
+# Stack Constraints
+
+Use ONLY the approved stack unless explicitly instructed otherwise.
+
+## API Layer
+
+* FastAPI
+
+## MCP Layer
+
+* FastMCP
+
+## Parsing
+
+* Docling
+* Tree-sitter
+
+## Retrieval
+
+* BM25 + Vector hybrid retrieval
+
+## Vector DB
+
+* Qdrant
+
+## Embeddings
+
+* BAAI/bge-large-en-v1.5
+* nomic-embed-text-v1.5 (local lightweight option)
+
+## Reranking
+
+* bge-reranker-large
+
+## Cache
+
+* Redis
+
+## Queue
+
+* Celery OR RQ
+
+## Git Integration
+
+* GitPython
+
+Do not introduce:
+
+* LangChain-heavy abstractions
+* unnecessary orchestration frameworks
+* speculative infrastructure
+
+---
+
+# Architecture Rules
+
+## Keep Architecture Monolithic Initially
+
+DO NOT introduce:
+
+* Kubernetes
+* microservices
+* service mesh
+* distributed workflow engines
+* event buses
+* complex CQRS/event sourcing
+* unnecessary async orchestration
+
+This project should remain:
+
+* locally runnable
+* docker runnable
+* debuggable by a small team
+
+Prefer practical implementation over “enterprise aesthetics.”
+
+---
+
+# Retrieval Rules
+
+Retrieval quality is the highest priority.
+
+Always preserve:
+
+* source attribution
+* semantic adjacency
+* section hierarchy
+* repository context
+* file lineage
+
+Every chunk must retain metadata:
+
+* repository
+* file path
+* language
+* heading hierarchy
+* symbols
+* imports
+* chunk type
+
+Never discard metadata during processing.
+
+---
+
+# Chunking Rules
+
+Chunking must preserve semantic structure.
+
+Chunk boundaries should prioritize:
+
+1. headings
+2. sections
+3. architecture blocks
+4. code boundaries
+5. semantic continuity
+
+Avoid naive fixed-size chunking.
+
+Always:
+
+* preserve nearby context
+* preserve parent section hierarchy
+* maintain overlap between chunks
+
+Code blocks should remain intact whenever possible.
+
+---
+
+# Parsing Rules
+
+Tree-sitter parsing is critical infrastructure.
+
+The parser layer must support extraction of:
+
+* imports
+* classes
+* methods
+* controllers
+* services
+* repositories
+* API routes
+* frontend API calls
+* inter-file references
+
+These relationships are foundational for:
+
+* future graph traversal
+* endpoint tracing
+* dependency mapping
+
+Do not simplify parsing into plain text extraction.
+
+---
+
+# Metadata Enrichment Rules
+
+Metadata enrichment is REQUIRED.
+
+All parsed artifacts should attempt to capture:
+
+* ownership
+* relationships
+* framework patterns
+* API semantics
+* repository associations
+
+Metadata quality is more important than raw ingestion volume.
+
+---
+
+# MCP Rules
+
+MCP tools must remain orchestration layers.
+
+Do NOT place:
+
+* retrieval pipelines
+* parsing logic
+* embedding generation
+* indexing logic
+
+inside MCP handlers.
+
+MCP tools should delegate to dedicated services.
+
+---
+
+# API Flow Explainer Rules
+
+The API Flow Explainer is a flagship capability.
+
+Implementation should support:
+
+1. frontend action identification
+2. endpoint discovery
+3. controller tracing
+4. service traversal
+5. repository interaction mapping
+6. architecture explanation
+
+The explanation must remain:
+
+* traceable
+* source-backed
+* deterministic where possible
+
+Avoid hallucinated architecture reasoning.
+
+---
+
+# Neo4j Rules
+
+Neo4j is FUTURE infrastructure.
+
+Do NOT implement Neo4j until:
+
+* ingestion stabilizes
+* parsing stabilizes
+* metadata extraction stabilizes
+
+Current focus:
+
+* accurate extraction
+* relationship-ready metadata
+* clean retrieval architecture
+
+Future graph support should emerge naturally from existing metadata.
+
+Do not prematurely optimize for graph traversal.
+
+---
+
+# JIRA Integration Rules
+
+JIRA integration should remain lightweight.
+
+Supported capabilities:
+
+* fetch ticket
+* summarize issue
+* infer impacted modules
+* generate implementation plan
+
+Do not build:
+
+* workflow automation systems
+* sprint management
+* autonomous ticket agents
+
+---
+
+# Standards Layer Rules
+
+The standards layer should remain simple and declarative.
+
+Prefer:
+
+* YAML rules
+* markdown conventions
+* lightweight validations
+
+Examples:
+
+* Angular conventions
+* Spring Boot layering checks
+
+Do not build a full policy engine.
+
+---
+
+# Coding Philosophy
+
+Prefer:
+
+* explicit data flow
+* readability
+* composability
+* traceability
+* debuggability
+
+Avoid:
+
+* magic abstractions
+* generic base classes
+* overuse of dependency injection
+* unnecessary wrappers
+* speculative extensibility
+
+Do not create frameworks inside the project.
+
+---
+
+# File Organization Rules
+
+Keep modules responsibility-driven.
+
+Avoid:
+
+* deeply nested structures
+* duplicate implementations
+* parallel pipelines
+* “utils” dumping grounds
+
+File structure should clearly reflect:
+
+* ingestion
+* parsing
+* retrieval
+* orchestration
+* indexing
+
+---
+
+# Performance Priorities
+
+Priority order:
+
+1. correctness
+2. retrieval quality
+3. metadata quality
+4. maintainability
+5. developer experience
+6. performance
+7. scalability
+
+Never sacrifice correctness for premature optimization.
+
+---
+
+# Documentation Requirements
+
+Every major component must document:
+
+* purpose
+* responsibilities
+* inputs/outputs
+* dependencies
+* architectural role
+
+Required docs:
+
+* architecture.md
+* setup.md
+* retrieval_pipeline.md
+* contribution_guide.md
+* roadmap.md
+
+Good documentation is a core deliverable, not an afterthought.
+
+---
+
+# Expected Engineering Style
+
+The codebase should resemble:
+
+* production infrastructure tooling
+* enterprise developer platforms
+* internal engineering systems
+
+NOT:
+
+* AI-generated abstraction soup
+* startup buzzword architecture
+* academic experimentation
+* “agentic” chaos systems
+
+Optimize for long-term maintainability by a small engineering team.
