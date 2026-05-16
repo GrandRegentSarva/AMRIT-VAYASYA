@@ -21,6 +21,14 @@ services:
       - qdrant_data:/qdrant/storage
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ["6381:6379"]
+  neo4j:
+    image: neo4j:5.18-community
+    ports: ["7474:7474", "7687:7687"]
+    environment:
+      NEO4J_AUTH: neo4j/vayasya_dev
+    volumes:
+      - neo4j_data:/data
 volumes:
   qdrant_data:
+  neo4j_data:

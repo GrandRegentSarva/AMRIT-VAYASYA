@@ -34,6 +34,8 @@ class MetadataEnricher:
             'comments': doc.comments[:50],
             'docstrings': doc.docstrings[:25],
             'api_routes': doc.api_routes,
+            'http_calls': doc.http_calls,
+            'dependencies': doc.dependencies,
             'framework_type': doc.framework_type,
             'source_hash': hashlib.sha256(doc.text.encode('utf-8')).hexdigest(),
             'ingestion_timestamp': ingestion_timestamp,

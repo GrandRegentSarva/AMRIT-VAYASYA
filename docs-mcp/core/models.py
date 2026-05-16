@@ -43,6 +43,8 @@ class ParsedDocument(BaseModel):
     comments: list[str] = Field(default_factory=list)
     docstrings: list[str] = Field(default_factory=list)
     api_routes: list[str] = Field(default_factory=list)
+    http_calls: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
     framework_type: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -62,6 +64,10 @@ class DocumentChunk(BaseModel):
     imports: list[str] = Field(default_factory=list)
     related_sections: list[str] = Field(default_factory=list)
     framework_type: str | None = None
+    classes: list[str] = Field(default_factory=list)
+    api_routes: list[str] = Field(default_factory=list)
+    http_calls: list[str] = Field(default_factory=list)
+    dependencies: list[str] = Field(default_factory=list)
     ingestion_timestamp: datetime = Field(default_factory=datetime.utcnow)
     prev_chunk_id: str | None = None
     next_chunk_id: str | None = None
