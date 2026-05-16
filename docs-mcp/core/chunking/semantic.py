@@ -126,6 +126,10 @@ class SemanticChunker:
             imports=doc.imports,
             related_sections=section.related_sections or doc.metadata.get('related_sections', []),
             framework_type=doc.framework_type,
+            classes=doc.metadata.get('classes') or doc.classes or [],
+            api_routes=doc.metadata.get('api_routes') or doc.api_routes or [],
+            http_calls=doc.metadata.get('http_calls') or doc.http_calls or [],
+            dependencies=doc.metadata.get('dependencies') or doc.dependencies or [],
             ingestion_timestamp=ingestion_timestamp,
             source_hash=source_hash,
         )

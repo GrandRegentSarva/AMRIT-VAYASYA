@@ -100,6 +100,8 @@ class SourceParser:
                     routes.extend(self._python_routes(node))
             symbols = classes + functions + routes
             headings = [path.name] + [section.title for section in sections if section.title]
+            http_calls = self._extract_http_calls(text, 'python')
+            dependencies = self._extract_dependencies(text, 'python')
             return ParsedDocument(
                 repo_name=repo_name,
                 path=str(path),
@@ -117,6 +119,8 @@ class SourceParser:
                 comments=comments,
                 docstrings=docstrings,
                 api_routes=sorted(set(routes)),
+                http_calls=sorted(set(http_calls)),
+                dependencies=sorted(set(dependencies)),
                 framework_type=framework,
                 metadata={'parser_name': 'ast'},
             )
@@ -222,6 +226,8 @@ class SourceParser:
     ) -> ParsedDocument:
         headings = [path.name] + [section.title for section in tree_result['sections'] if section.title]
         symbols = tree_result['classes'] + tree_result['functions'] + tree_result['interfaces'] + tree_result['api_routes']
+        http_calls = tree_result.get('http_calls', []) + self._extract_http_calls(text, lang)
+        dependencies = tree_result.get('dependencies', []) + self._extract_dependencies(text, lang)
         return ParsedDocument(
             repo_name=repo_name,
             path=str(path),
@@ -239,6 +245,8 @@ class SourceParser:
             comments=self._dedupe_preserve_order(tree_result['comments']),
             docstrings=self._dedupe_preserve_order(tree_result['docstrings']),
             api_routes=sorted(set(tree_result['api_routes'])),
+            http_calls=sorted(set(http_calls)),
+            dependencies=sorted(set(dependencies)),
             framework_type=framework,
             metadata={'parser_name': tree_result.get('parser_name', 'tree-sitter')},
         )
@@ -259,6 +267,8 @@ class SourceParser:
         annotations = decorators + re.findall(r'^\s*@([A-Za-z_][\w.]*)', text, re.M)
         routes = self._detect_rest_endpoints(text, lang)
         comments = self._extract_comments(text, lang)
+        http_calls = self._extract_http_calls(text, lang)
+        dependencies = self._extract_dependencies(text, lang)
         sections = self._regex_sections(path.name, text, classes, funcs, interfaces)
         return ParsedDocument(
             repo_name=repo_name,
@@ -277,6 +287,8 @@ class SourceParser:
             comments=comments,
             docstrings=[],
             api_routes=sorted(set(routes)),
+            http_calls=sorted(set(http_calls)),
+            dependencies=sorted(set(dependencies)),
             framework_type=framework,
             metadata={'parser_name': 'regex'},
         )
@@ -333,6 +345,55 @@ class SourceParser:
         if lang == 'go':
             return re.findall(r'HandleFunc\(["\']([^"\']+)["\']', text)
         return []
+
+    def _extract_http_calls(self, text: str, lang: str) -> list[str]:
+        """Extract outbound HTTP calls made by frontend/client code."""
+        calls = []
+        if lang in {'typescript', 'javascript'}:
+            # Angular HttpClient: this.http.get('/api/...') or this.httpClient.post('/api/...')
+            angular = re.findall(
+                r'\.(?:http|httpClient|_http)\.(get|post|put|delete|patch)\s*[<(][^)]*?[\'"]([^\'"]+)[\'"]',
+                text, re.I
+            )
+            calls.extend(f'{m.upper()} {p}' for m, p in angular if p and p.startswith('/'))
+            # fetch('/api/...')
+            fetch = re.findall(
+                r"""fetch\(\s*['"]([^'"]+)['"]\s*(?:,\s*\{[^}]*?method\s*:\s*['"]([A-Za-z]+))?""",
+                text,
+            )
+            for url, method in fetch:
+                if url and url.startswith('/'):
+                    calls.append(f"{(method or 'GET').upper()} {url}")
+            # axios.get('/api/...')
+            axios = re.findall(r'axios\.(get|post|put|delete|patch)\s*\([\'"]([^\'"]+)[\'"]', text, re.I)
+            calls.extend(f'{m.upper()} {p}' for m, p in axios if p and p.startswith('/'))
+        elif lang == 'java':
+            # RestTemplate / WebClient
+            rest = re.findall(
+                r'(?:restTemplate|webClient)\.(get|post|put|delete|patch)ForObject\([^,]*[\'"]([^\'"]+)[\'"]',
+                text, re.I
+            )
+            calls.extend(f'{m.upper()} {p}' for m, p in rest)
+            # UriComponentsBuilder / HttpEntity patterns
+            uri = re.findall(r'URI\.create\([\'"]([^\'"]+)[\'"]\)', text)
+            calls.extend(f'GET {u}' for u in uri if u and u.startswith('/'))
+        return calls
+
+    def _extract_dependencies(self, text: str, lang: str) -> list[str]:
+        """Extract injected service/class dependencies."""
+        deps = []
+        if lang == 'java':
+            # Constructor injection: private final BeneficiaryService beneficiaryService;
+            deps.extend(re.findall(r'(?:private|protected)\s+(?:final\s+)?([A-Z][\w]+(?:Service|Repository|Repo|Client|Manager|Helper))\s+\w+', text))
+            # @Autowired fields
+            deps.extend(re.findall(r'@Autowired[^;]+?([A-Z][\w]+)\s+\w+\s*;', text, re.S))
+        elif lang in {'typescript', 'javascript'}:
+            # Angular constructor injection: constructor(private beneficiaryService: BeneficiaryService)
+            deps.extend(re.findall(r'constructor\s*\([^)]+?([A-Z][\w]+(?:Service|Client|Repository|Store|Facade))\b', text))
+        elif lang == 'python':
+            # FastAPI Depends() or direct instantiation
+            deps.extend(re.findall(r'Depends\(([A-Za-z_][\w]*)\)', text))
+        return deps
 
     def _extract_comments(self, text: str, lang: str) -> list[str]:
         if lang == 'python':
