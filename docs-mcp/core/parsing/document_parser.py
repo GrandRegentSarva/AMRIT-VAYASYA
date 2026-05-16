@@ -94,7 +94,7 @@ class DocumentParser:
             hierarchy = hierarchy[:level - 1] + [title]
             body_parts = []
             sibling = heading.next_sibling
-            while sibling and not getattr(sibling, 'name', '').startswith('h'):
+            while sibling and not (getattr(sibling, 'name', None) or '').startswith('h'):
                 if hasattr(sibling, 'get_text'):
                     body_parts.append(sibling.get_text(' ', strip=True))
                 sibling = sibling.next_sibling
