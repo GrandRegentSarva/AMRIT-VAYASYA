@@ -45,6 +45,26 @@ async def get_implementation_plan(issue_key: str) -> dict:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 
+@app.post('/plan/{issue_key}/publish')
+async def publish_implementation_plan(issue_key: str) -> dict:
+    """
+    Generate a graph-grounded implementation plan and publish it as a comment on the Jira ticket.
+    """
+    from integrations.jira_client import post_comment
+    try:
+        plan_text = generate_implementation_plan(issue_key)
+        success, msg = post_comment(issue_key, plan_text)
+        if not success:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Jira API Error: {msg}")
+        return {'issue_key': issue_key, 'status': 'published'}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
 if __name__ == '__main__':
     import uvicorn
     from config import get_settings

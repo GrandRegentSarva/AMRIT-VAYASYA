@@ -188,3 +188,29 @@ def list_tickets() -> list[dict[str, Any]]:
         }
         for t in _MOCK_TICKETS.values()
     ]
+
+
+def post_comment(issue_key: str, comment_body: str) -> tuple[bool, str]:
+    """
+    Post a comment to a Jira ticket.
+    Returns (True, "Success") if successful, (False, "Error message") if failed.
+    """
+    settings = get_settings()
+    server = settings.jira_server
+    email = settings.jira_email
+    token = settings.jira_api_token
+    if not (server and email and token):
+        msg = f"Mock: Would have posted to {issue_key}: {comment_body[:50]}..."
+        print(msg)
+        return False, "Credentials not configured. Simulated success."
+
+    try:
+        from jira import JIRA  # type: ignore
+        jira = JIRA(server=server, basic_auth=(email, token))
+        jira.add_comment(issue_key, comment_body)
+        return True, "Success"
+    except Exception as exc:
+        err_msg = str(exc)
+        print(f"Jira API error (post_comment): {err_msg}")
+        return False, err_msg
+

@@ -54,5 +54,25 @@ async def create_implementation_plan(issue_key: str) -> dict:
         return {'ok': False, 'error': str(exc)}
 
 
+@mcp.tool()
+async def publish_implementation_plan(issue_key: str) -> dict:
+    """
+    Generate a graph-grounded implementation plan and publish it as a comment on the Jira ticket.
+    """
+    from integrations.jira_client import post_comment
+    try:
+        plan = generate_implementation_plan(issue_key)
+        success, msg = post_comment(issue_key, plan)
+        if not success:
+            return {'ok': False, 'error': f"Jira API Error: {msg}"}
+        return {'ok': True, 'issue_key': issue_key, 'status': 'published'}
+    except ValueError as exc:
+        return {'ok': False, 'error': str(exc)}
+    except RuntimeError as exc:
+        return {'ok': False, 'error': str(exc)}
+    except Exception as exc:
+        return {'ok': False, 'error': str(exc)}
+
+
 if __name__ == '__main__':
     mcp.run()
