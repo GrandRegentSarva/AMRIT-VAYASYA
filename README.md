@@ -1,9 +1,12 @@
 # AMRIT-VAYASYA
+
+An autonomous cross-repository intelligence engine. The system ingests source code from multiple repositories, builds a structural knowledge graph, and answers deep architectural questions across service boundaries. Highly optimized for Java/Spring Boot on the backend and Angular/Fetch/Axios on the fronten.
+
 <img width="1366" height="768" alt="Screenshot from 2026-05-17 20-23-30" src="https://github.com/user-attachments/assets/e9700eef-f775-4f3f-b98f-3152dd4f3e55" />
 
 <img width="1366" height="768" alt="Screenshot from 2026-05-17 20-48-15" src="https://github.com/user-attachments/assets/5f20aab0-5ea7-4f24-bffa-844519e48df4" />
 
-An autonomous cross-repository intelligence engine. The system ingests source code from multiple repositories, builds a structural knowledge graph, and answers deep architectural questions across service boundaries. Highly optimized for Java/Spring Boot on the backend and Angular/Fetch/Axios on the fronten.
+<img width="1359" height="564" alt="Screenshot from 2026-05-17 20-09-22" src="https://github.com/user-attachments/assets/39e8a74d-fbed-403e-925b-e256344445cc" />
 
 ---
 
