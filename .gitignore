@@ -94,3 +94,7 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+
+# AI Coding Assistants
+.clinerules
+.codex
