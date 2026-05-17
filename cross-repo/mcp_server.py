@@ -5,8 +5,6 @@ from fastmcp import FastMCP
 from core.evidence_collector import EvidenceCollector
 from core.graph_builder import GraphBuilder
 from core.neo4j_client import Neo4jClient
-from integrations.jira_client import get_ticket, list_tickets
-from integrations.plan_generator import generate_implementation_plan
 
 mcp = FastMCP('cross-repo')
 
@@ -134,46 +132,6 @@ async def explain_architecture(feature: str) -> dict:
         ],
         'provenance': ev.provenance,
     }
-
-
-@mcp.tool()
-async def list_jira_tickets() -> dict:
-    """List all available Jira tickets and their status."""
-    try:
-        return {'ok': True, 'tickets': list_tickets()}
-    except Exception as exc:
-        return {'ok': False, 'error': str(exc)}
-
-
-@mcp.tool()
-async def get_jira_ticket(issue_key: str) -> dict:
-    """Fetch the details of a specific Jira ticket."""
-    try:
-        return {'ok': True, 'ticket': get_ticket(issue_key)}
-    except ValueError as exc:
-        return {'ok': False, 'error': str(exc)}
-
-
-@mcp.tool()
-async def create_implementation_plan(issue_key: str) -> dict:
-    """
-    Generate a graph-grounded implementation plan for a Jira ticket.
-
-    Flow:
-      Ticket -> Intent Extraction -> Feature Resolution
-      -> Traversal Expansion -> Impact Analysis
-      -> Code Retrieval -> Implementation Plan
-
-    The plan cites exact files, classes, and DTOs derived from the
-    knowledge graph. This is NOT generic AI coding advice.
-    """
-    try:
-        plan = generate_implementation_plan(issue_key)
-        return {'ok': True, 'issue_key': issue_key, 'plan': plan}
-    except ValueError as exc:
-        return {'ok': False, 'error': str(exc)}
-    except Exception as exc:
-        return {'ok': False, 'error': str(exc)}
 
 
 if __name__ == '__main__':

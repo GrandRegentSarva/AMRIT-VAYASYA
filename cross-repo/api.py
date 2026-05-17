@@ -5,8 +5,6 @@ from fastapi import FastAPI, HTTPException, Query, status
 from core.evidence_collector import EvidenceCollector
 from core.graph_builder import GraphBuilder
 from core.neo4j_client import Neo4jClient
-from integrations.jira_client import get_ticket, list_tickets
-from integrations.plan_generator import generate_implementation_plan
 
 app = FastAPI(title='Cross-Repo API', version='0.1.0')
 
@@ -163,33 +161,6 @@ async def explain_feature(
         ],
         'provenance': ev.provenance,
     }
-
-
-@app.get('/jira/tickets')
-async def list_jira_tickets() -> dict:
-    """List all available Jira tickets (mock or real)."""
-    return {'tickets': list_tickets()}
-
-
-@app.get('/jira/ticket/{issue_key}')
-async def get_jira_ticket(issue_key: str) -> dict:
-    """Fetch a single Jira ticket by key."""
-    try:
-        return get_ticket(issue_key)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-
-
-@app.get('/jira/plan/{issue_key}')
-async def get_implementation_plan(issue_key: str) -> dict:
-    """Generate a graph-grounded implementation plan for a Jira ticket."""
-    try:
-        plan_text = generate_implementation_plan(issue_key)
-        return {'issue_key': issue_key, 'plan': plan_text}
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 
 if __name__ == '__main__':
