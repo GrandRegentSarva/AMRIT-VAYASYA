@@ -98,3 +98,4 @@ dmypy.json
 # AI Coding Assistants
 .clinerules
 .codex
+__pycache__/
