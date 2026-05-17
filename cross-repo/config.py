@@ -37,6 +37,10 @@ class Settings(BaseSettings):
         default=8001,
         validation_alias=AliasChoices('cross_repo_port', 'CROSS_REPO_PORT'),
     )
+    groq_api_key: str = Field(
+        default='',
+        validation_alias=AliasChoices('groq_api_key', 'GROQ_API_KEY'),
+    )
 
 
 @lru_cache

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from fastapi import FastAPI, HTTPException, Query, status
 
+from core.evidence_collector import EvidenceCollector
 from core.graph_builder import GraphBuilder
 from core.neo4j_client import Neo4jClient
+from integrations.jira_client import get_ticket, list_tickets
+from integrations.plan_generator import generate_implementation_plan
 
 app = FastAPI(title='Cross-Repo API', version='0.1.0')
 
@@ -92,6 +95,101 @@ async def get_dependencies(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
     finally:
         neo4j.close()
+
+
+
+@app.get('/explain')
+async def explain_feature(
+    feature: str = Query(..., description='Plain-English feature name to explain'),
+) -> dict:
+    """
+    Run deterministic traversal and return structured TraversalEvidence.
+    This is the data contract the Explainer Skill and the LLM use.
+    """
+    collector = EvidenceCollector()
+    try:
+        ev = collector.collect(feature)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    finally:
+        collector.close()
+
+    if ev.is_empty():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'No evidence found for feature: {feature}',
+        )
+
+    return {
+        'feature': ev.feature,
+        'confidence': ev.confidence,
+        'summary': ev.summary(),
+        'backend_endpoints': [
+            {
+                'method': ep.method,
+                'path': ep.path,
+                'normalized_path': ep.normalized_path,
+                'handler_class': ep.handler_class,
+                'handler_kind': ep.handler_kind,
+                'repo': ep.repo,
+                'backend_file': ep.backend_file,
+                'api_contract': {
+                    'request_dto': ep.api_contract.request_dto,
+                    'response_dto': ep.api_contract.response_dto,
+                    'path_params': ep.api_contract.path_params,
+                } if ep.api_contract else None,
+            }
+            for ep in ev.backend_endpoints
+        ],
+        'service_chain': ev.service_chain,
+        'frontend_components': [
+            {
+                'class_name': fc.class_name,
+                'repo': fc.repo,
+                'file_path': fc.file_path,
+                'http_method': fc.http_method,
+                'called_path': fc.called_path,
+                'evidence': {
+                    'matched_via': fc.evidence.matched_via,
+                    'confidence': fc.evidence.confidence,
+                    'source_file': fc.evidence.source_file,
+                },
+            }
+            for fc in ev.frontend_components
+        ],
+        'unresolved_hops': [
+            {'name': h.name, 'type': h.hop_type, 'context': h.context}
+            for h in ev.unresolved_hops
+        ],
+        'provenance': ev.provenance,
+    }
+
+
+@app.get('/jira/tickets')
+async def list_jira_tickets() -> dict:
+    """List all available Jira tickets (mock or real)."""
+    return {'tickets': list_tickets()}
+
+
+@app.get('/jira/ticket/{issue_key}')
+async def get_jira_ticket(issue_key: str) -> dict:
+    """Fetch a single Jira ticket by key."""
+    try:
+        return get_ticket(issue_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+@app.get('/jira/plan/{issue_key}')
+async def get_implementation_plan(issue_key: str) -> dict:
+    """Generate a graph-grounded implementation plan for a Jira ticket."""
+    try:
+        plan_text = generate_implementation_plan(issue_key)
+        return {'issue_key': issue_key, 'plan': plan_text}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 
 if __name__ == '__main__':
