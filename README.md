@@ -106,7 +106,13 @@ Vayasya/
 |   |                                           create_implementation_plan)
 |   +-- tests/                  8 unit tests
 |
++-- standards/                  Section E: Lightweight Standards Layer
+|   +-- spring-boot.yml         Layering, REST, DTO, DI, exception conventions
+|   +-- angular.yml             Component structure, naming, HTTP, DI, state conventions
+|   +-- README.md               How standards are structured and consumed
+|
 +-- README.md
++-- CONTRIBUTING.md
 +-- LICENSE
 ```
 

@@ -1,0 +1,114 @@
+# Spring Boot Conventions
+# AMRIT Backend Architecture Standards
+# These rules define the expected layering, naming, and structural
+# patterns for all Spring Boot microservices in the AMRIT platform.
+
+layering:
+  description: >
+    Spring Boot services must follow a strict three-layer architecture.
+    Each layer has a single responsibility and communicates only with
+    the layer directly below it. Cross-layer calls are violations.
+
+  layers:
+    - name: Controller
+      annotations:
+        - "@RestController"
+        - "@Controller"
+        - "@RequestMapping"
+      responsibility: >
+        HTTP request handling, input validation, response shaping.
+        Controllers must NOT contain business logic.
+      naming_pattern: "*Controller.java"
+      allowed_dependencies:
+        - Service
+
+    - name: Service
+      annotations:
+        - "@Service"
+        - "@Transactional"
+      responsibility: >
+        Business logic, orchestration, transaction management.
+        Services must NOT import HTTP-related classes (HttpServletRequest, ResponseEntity).
+      naming_pattern: "*Service.java or *ServiceImpl.java"
+      allowed_dependencies:
+        - Repository
+        - other Service classes
+
+    - name: Repository
+      annotations:
+        - "@Repository"
+        - "extends JpaRepository"
+        - "extends CrudRepository"
+      responsibility: >
+        Data access only. No business logic. No HTTP awareness.
+      naming_pattern: "*Repository.java or *Repo.java"
+      allowed_dependencies: []
+
+rest_conventions:
+  description: >
+    All REST endpoints must follow consistent path and method conventions.
+
+  path_structure:
+    base: "/api/{version}/{resource}"
+    examples:
+      - "/api/v1/beneficiary"
+      - "/api/v1/patient/{patientId}/records"
+    rules:
+      - Use lowercase with hyphens for multi-word resources
+      - Use path parameters for resource identifiers
+      - Use query parameters for filtering and pagination
+      - Version all public APIs
+
+  http_methods:
+    GET: "Read operations only. Must be idempotent."
+    POST: "Create operations. Returns 201 on success."
+    PUT: "Full resource replacement. Requires complete payload."
+    PATCH: "Partial update. Only modified fields required."
+    DELETE: "Resource removal. Returns 204 on success."
+
+  response_codes:
+    - code: 200
+      usage: "Successful read or update"
+    - code: 201
+      usage: "Successful resource creation"
+    - code: 204
+      usage: "Successful deletion (no body)"
+    - code: 400
+      usage: "Malformed request or validation failure"
+    - code: 404
+      usage: "Resource not found"
+    - code: 500
+      usage: "Unhandled server error"
+
+dto_conventions:
+  description: >
+    Data Transfer Objects define the contract between the API layer
+    and its consumers. DTOs must be separate from entity classes.
+
+  rules:
+    - "Request DTOs: *RequestDTO.java or *Request.java"
+    - "Response DTOs: *ResponseDTO.java or *Response.java"
+    - "DTOs must not extend JPA entity classes"
+    - "Use @Valid and Bean Validation annotations on request DTOs"
+    - "DTOs live in a dedicated 'dto' or 'model' package"
+
+dependency_injection:
+  description: >
+    Constructor injection is the preferred pattern.
+    Field injection via @Autowired is discouraged for testability.
+
+  preferred: "Constructor injection (final fields, no @Autowired annotation needed)"
+  discouraged: "@Autowired on fields (cannot be tested without Spring context)"
+  forbidden: "Static method access to Spring beans"
+
+exception_handling:
+  description: >
+    Use @ControllerAdvice for centralized exception handling.
+    Do not catch and swallow exceptions in service or repository layers.
+
+  pattern: "@ControllerAdvice + @ExceptionHandler"
+  rules:
+    - "Define domain-specific exception classes (e.g., BeneficiaryNotFoundException)"
+    - "Map exceptions to appropriate HTTP status codes in the advice class"
+    - "Log the full stack trace at ERROR level before returning the response"
+    - "Never expose internal stack traces in API responses"

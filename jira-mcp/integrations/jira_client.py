@@ -13,6 +13,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+from config import get_settings
+
 # Canonical MVP tickets — designed to demonstrate different graph intelligence paths
 _MOCK_TICKETS: dict[str, dict[str, Any]] = {
     'AMRIT-101': {
@@ -90,9 +92,10 @@ _MOCK_TICKETS: dict[str, dict[str, Any]] = {
 
 def _try_real_jira(issue_key: str) -> dict[str, Any] | None:
     """Attempt to fetch from a real Jira instance if credentials are configured."""
-    server = os.environ.get('JIRA_SERVER')
-    email = os.environ.get('JIRA_EMAIL')
-    token = os.environ.get('JIRA_API_TOKEN')
+    settings = get_settings()
+    server = settings.jira_server
+    email = settings.jira_email
+    token = settings.jira_api_token
     if not (server and email and token):
         return None
 
@@ -110,7 +113,43 @@ def _try_real_jira(issue_key: str) -> dict[str, Any] | None:
             'affected_feature': issue.key.split('-')[0].lower(),
             'ticket_type': str(issue.fields.issuetype).lower(),
         }
-    except Exception:
+    except Exception as exc:
+        print(f"Jira API error (get): {exc}")
+        return None
+
+
+def _try_real_jira_list() -> list[dict[str, Any]] | None:
+    """Attempt to list recent tickets from a real Jira instance."""
+    settings = get_settings()
+    server = settings.jira_server
+    email = settings.jira_email
+    token = settings.jira_api_token
+    if not (server and email and token):
+        return None
+
+    try:
+        from jira import JIRA  # type: ignore
+        jira = JIRA(server=server, basic_auth=(email, token))
+        # Jira Cloud requires bounded JQL — use a 90-day window
+        issues = jira.search_issues(
+            'created >= -90d ORDER BY created DESC',
+            maxResults=20,
+        )
+        if not issues:
+            return None  # fall back to mock tickets
+
+        return [
+            {
+                'key': issue.key,
+                'summary': issue.fields.summary,
+                'status': str(issue.fields.status),
+                'priority': str(issue.fields.priority),
+                'ticket_type': str(issue.fields.issuetype).lower(),
+            }
+            for issue in issues
+        ]
+    except Exception as exc:
+        print(f"Jira API error (list): {exc}")
         return None
 
 
@@ -134,7 +173,11 @@ def get_ticket(issue_key: str) -> dict[str, Any]:
 
 
 def list_tickets() -> list[dict[str, Any]]:
-    """List all available mock tickets (summary only)."""
+    """List all available tickets. Uses real Jira if configured, falls back to mock data."""
+    real_list = _try_real_jira_list()
+    if real_list is not None:
+        return real_list
+
     return [
         {
             'key': t['key'],
