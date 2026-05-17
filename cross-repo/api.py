@@ -163,6 +163,77 @@ async def explain_feature(
     }
 
 
+@app.get('/explain-narrate')
+async def explain_narrate(
+    feature: str = Query(..., description='Plain-English feature name to explain'),
+) -> dict:
+    """
+    Deterministic traversal + Groq narration.
+    Returns the raw evidence AND a natural-language explanation.
+    Uses the model fallback chain (70b -> 8b) with rate-limit retry.
+    """
+    from core.groq_orchestrator import complete
+
+    collector = EvidenceCollector()
+    try:
+        ev = collector.collect(feature)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+    finally:
+        collector.close()
+
+    if ev.is_empty():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f'No evidence found for feature: {feature}',
+        )
+
+    # Build context for the LLM
+    context_parts = [
+        f'FEATURE: {ev.feature}',
+        f'CONFIDENCE: {ev.confidence:.0%}',
+    ]
+    for ep in ev.backend_endpoints:
+        context_parts.append(f'ENDPOINT: {ep.method} {ep.path} -> {ep.handler_class} ({ep.handler_kind})')
+    if ev.service_chain:
+        context_parts.append(f'SERVICE CHAIN: {" -> ".join(ev.service_chain)}')
+    for hop in ev.unresolved_hops:
+        context_parts.append(f'UNRESOLVED: [{hop.hop_type}] {hop.name} - {hop.context}')
+
+    context = '\n'.join(context_parts)
+
+    resp = complete(
+        prompt=(
+            f'{context}\n\n'
+            'Based ONLY on the above evidence, write a clear architecture explanation '
+            'covering: what triggers this feature, which backend endpoint handles it, '
+            'the service dependency chain, and any external boundaries.'
+        ),
+        system_prompt=(
+            'You are an expert software architect. '
+            'Explain code architecture clearly. Cite only facts from the evidence.'
+        ),
+        temperature=0.2,
+    )
+
+    return {
+        'feature': ev.feature,
+        'confidence': ev.confidence,
+        'summary': ev.summary(),
+        'explanation': resp.text if resp.ok else None,
+        'groq': {
+            'model_used': resp.model_used,
+            'tokens_used': resp.tokens_used,
+            'latency_ms': resp.latency_ms,
+            'ok': resp.ok,
+            'error': resp.error,
+        },
+        'service_chain': ev.service_chain,
+        'endpoint_count': len(ev.backend_endpoints),
+        'provenance': ev.provenance,
+    }
+
+
 if __name__ == '__main__':
     import uvicorn
     from config import get_settings

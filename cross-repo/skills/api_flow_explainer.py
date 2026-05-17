@@ -191,27 +191,26 @@ def _build_llm_context(ev: TraversalEvidence) -> str:
     return '\n'.join(parts)
 
 
-def _run_groq(context: str) -> str:
-    try:
-        import groq
-    except ImportError:
-        return '[Error] groq package not installed. Run: pip install groq'
+def _run_groq(context: str) -> tuple[str, str, float]:
+    """
+    Send assembled evidence context to Groq via the orchestration layer.
+    Returns (explanation_text, model_used, latency_ms).
+    """
+    from core.groq_orchestrator import complete
 
-    api_key = os.environ.get('GROQ_API_KEY') or ''
-    if not api_key:
-        return '[Error] GROQ_API_KEY not set in environment or cross-repo/.env'
+    system_prompt = (
+        'You are an expert software architect. '
+        'You explain code architecture clearly and precisely. '
+        'You cite only facts from the provided evidence. '
+        'You do not speculate or hallucinate.'
+    )
 
-    client = groq.Groq(api_key=api_key)
-    try:
-        response = client.chat.completions.create(
-            model='llama3-70b-8192',
-            messages=[{'role': 'user', 'content': context}],
-            temperature=0.2,
-            max_tokens=1500,
-        )
-        return response.choices[0].message.content or ''
-    except Exception as exc:
-        return f'[Groq error] {exc}'
+    resp = complete(prompt=context, system_prompt=system_prompt, temperature=0.2)
+
+    if not resp.ok:
+        return f'[Groq error] {resp.error}', 'none', 0.0
+
+    return resp.text, resp.model_used, resp.latency_ms
 
 
 # ---------------------------------------------------------------------------
@@ -296,8 +295,8 @@ def main() -> None:
     print('\nAssembling context for Groq explanation layer ...\n')
     context = _build_llm_context(ev)
 
-    print('Sending to Groq (llama3-70b-8192) ...\n')
-    explanation = _run_groq(context)
+    print('Sending to Groq (model chain: 70b -> 8b fallback) ...\n')
+    explanation, model_used, latency_ms = _run_groq(context)
 
     print(_section('DETERMINISTIC EVIDENCE SUMMARY'))
     print(f'  Feature    : {ev.feature}')
@@ -307,6 +306,9 @@ def main() -> None:
     print(f'  Unresolved : {len(ev.unresolved_hops)} hop(s)')
 
     print(_section('GROQ ARCHITECTURE EXPLANATION'))
+    print(f'  Model   : {model_used}')
+    print(f'  Latency : {latency_ms:.0f}ms')
+    print()
     print(explanation)
     print()
 
