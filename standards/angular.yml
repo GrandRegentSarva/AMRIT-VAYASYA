@@ -1,0 +1,112 @@
+# Angular Conventions
+# AMRIT Frontend Architecture Standards
+# These rules define the expected component structure, service patterns,
+# and HTTP communication conventions for all Angular frontends in AMRIT.
+
+component_structure:
+  description: >
+    Angular applications must follow a modular, feature-based structure.
+    Shared utilities, services, and models live in a core module.
+
+  directory_layout:
+    - path: "src/app/core/"
+      purpose: "Singleton services, guards, interceptors, global models"
+    - path: "src/app/shared/"
+      purpose: "Reusable components, pipes, directives (no business logic)"
+    - path: "src/app/features/{feature-name}/"
+      purpose: "Feature modules with their own components, services, and routes"
+    - path: "src/environments/"
+      purpose: "Environment-specific configuration (API URLs, feature flags)"
+
+  rules:
+    - "Each feature module is self-contained with its own routing"
+    - "Core module is imported only in AppModule"
+    - "Shared module is imported by feature modules as needed"
+    - "No circular dependencies between feature modules"
+
+naming_conventions:
+  description: >
+    Consistent naming ensures the codebase is navigable and the
+    cross-repo intelligence engine can reliably classify components.
+
+  patterns:
+    - type: Component
+      pattern: "{feature-name}.component.ts"
+      class_name: "{FeatureName}Component"
+      example: "beneficiary-registration.component.ts -> BeneficiaryRegistrationComponent"
+
+    - type: Service
+      pattern: "{feature-name}.service.ts"
+      class_name: "{FeatureName}Service"
+      example: "beneficiary.service.ts -> BeneficiaryService"
+
+    - type: Module
+      pattern: "{feature-name}.module.ts"
+      class_name: "{FeatureName}Module"
+      example: "beneficiary.module.ts -> BeneficiaryModule"
+
+    - type: Model
+      pattern: "{model-name}.model.ts"
+      example: "beneficiary.model.ts"
+
+    - type: Guard
+      pattern: "{guard-name}.guard.ts"
+      example: "auth.guard.ts"
+
+    - type: Interceptor
+      pattern: "{interceptor-name}.interceptor.ts"
+      example: "auth-token.interceptor.ts"
+
+http_conventions:
+  description: >
+    All HTTP communication with backend services must go through
+    Angular's HttpClient, injected via constructor DI in service classes.
+
+  rules:
+    - "All HTTP calls must be made from service classes, never from components"
+    - "Use HttpClient (from @angular/common/http), not raw fetch or XMLHttpRequest"
+    - "Define API base URLs in environment files, not hardcoded in services"
+    - "Use HttpInterceptors for auth tokens, error handling, and logging"
+
+  api_url_pattern:
+    format: "environment.apiBaseUrl + '/api/v1/{resource}'"
+    example: "this.http.get(`${environment.apiBaseUrl}/api/v1/beneficiary/${id}`)"
+
+  error_handling:
+    pattern: "catchError in RxJS pipe"
+    rules:
+      - "Services must not swallow HTTP errors silently"
+      - "Use a centralized error handler service or interceptor"
+      - "Display user-facing error messages via a notification service"
+
+dependency_injection:
+  description: >
+    Angular uses constructor-based dependency injection.
+    The cross-repo engine relies on constructor signatures to resolve
+    service dependencies across the frontend codebase.
+
+  rules:
+    - "Inject services via constructor parameters with type annotations"
+    - "Use the providedIn: 'root' pattern for singleton services"
+    - "Feature-scoped services use providedIn: FeatureModule"
+    - "Never instantiate services manually with 'new'"
+
+  example: |
+    @Component({ selector: 'app-beneficiary-registration' })
+    export class BeneficiaryRegistrationComponent {
+      constructor(
+        private beneficiaryService: BeneficiaryService,
+        private router: Router
+      ) {}
+    }
+
+state_management:
+  description: >
+    For simple AMRIT modules, RxJS BehaviorSubjects in services are sufficient.
+    NgRx or similar state management libraries are only warranted for
+    complex, multi-component state sharing.
+
+  rules:
+    - "Use BehaviorSubject in services for simple shared state"
+    - "Components subscribe in ngOnInit and unsubscribe in ngOnDestroy"
+    - "Avoid storing UI state in services (loading flags stay in components)"

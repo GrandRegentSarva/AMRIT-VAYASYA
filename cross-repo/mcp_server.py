@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from core.evidence_collector import EvidenceCollector
 from core.graph_builder import GraphBuilder
 from core.neo4j_client import Neo4jClient
 
@@ -76,6 +77,61 @@ async def rebuild_graph() -> dict:
         return {'ok': False, 'error': str(exc)}
     finally:
         builder.close()
+
+
+@mcp.tool()
+async def explain_architecture(feature: str) -> dict:
+    """
+    Deterministic traversal + evidence collection for a feature.
+
+    Returns structured TraversalEvidence including:
+    - Backend endpoints and handler classes
+    - Service dependency chain
+    - Frontend callers (if ingested)
+    - API contracts (DTOs)
+    - Unresolved external hops
+    - Full provenance trail
+
+    The LLM should narrate this evidence; it should NOT query the graph directly.
+    """
+    collector = EvidenceCollector()
+    try:
+        ev = collector.collect(feature)
+    except Exception as exc:
+        return {'ok': False, 'error': str(exc)}
+    finally:
+        collector.close()
+
+    if ev.is_empty():
+        return {'ok': False, 'error': f'No evidence found for feature: {feature}'}
+
+    return {
+        'ok': True,
+        'summary': ev.summary(),
+        'backend_endpoints': [
+            {
+                'method': ep.method,
+                'path': ep.path,
+                'normalized_path': ep.normalized_path,
+                'handler_class': ep.handler_class,
+                'handler_kind': ep.handler_kind,
+                'repo': ep.repo,
+                'backend_file': ep.backend_file,
+                'api_contract': {
+                    'request_dto': ep.api_contract.request_dto,
+                    'response_dto': ep.api_contract.response_dto,
+                    'path_params': ep.api_contract.path_params,
+                } if ep.api_contract else None,
+            }
+            for ep in ev.backend_endpoints
+        ],
+        'service_chain': ev.service_chain,
+        'unresolved_hops': [
+            {'name': h.name, 'type': h.hop_type, 'context': h.context}
+            for h in ev.unresolved_hops
+        ],
+        'provenance': ev.provenance,
+    }
 
 
 if __name__ == '__main__':

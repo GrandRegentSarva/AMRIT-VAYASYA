@@ -5,6 +5,7 @@ from typing import Any
 from neo4j import GraphDatabase
 
 from config import get_settings
+from core.route_normalizer import normalize_route, routes_match
 
 
 class Neo4jClient:
@@ -27,6 +28,7 @@ class Neo4jClient:
             'CREATE CONSTRAINT file_path IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE',
             'CREATE CONSTRAINT class_id IF NOT EXISTS FOR (c:Class) REQUIRE c.id IS UNIQUE',
             'CREATE CONSTRAINT endpoint_id IF NOT EXISTS FOR (e:Endpoint) REQUIRE e.id IS UNIQUE',
+            'CREATE CONSTRAINT unresolved_id IF NOT EXISTS FOR (u:UnresolvedDependency) REQUIRE u.id IS UNIQUE',
         ]
         with self._driver.session() as session:
             for q in queries:
@@ -71,15 +73,32 @@ class Neo4jClient:
                 uid=uid, name=name, kind=kind, repo=repo, file_path=file_path,
             )
 
-    def upsert_endpoint(self, method: str, path: str, handler_class_id: str | None, repo: str) -> None:
+    def upsert_endpoint(
+        self,
+        method: str,
+        path: str,
+        handler_class_id: str | None,
+        repo: str,
+        request_dto: str | None = None,
+        response_dto: str | None = None,
+    ) -> None:
         uid = f'{method.upper()}::{path}'
+        norm_path = normalize_route(path)
         with self._driver.session() as session:
             session.run(
                 '''
                 MERGE (e:Endpoint {id: $uid})
-                SET e.method = $method, e.path = $path, e.repo = $repo
+                SET e.method = $method,
+                    e.path = $path,
+                    e.normalized_path = $norm_path,
+                    e.repo = $repo,
+                    e.request_dto = $request_dto,
+                    e.response_dto = $response_dto
                 ''',
-                uid=uid, method=method.upper(), path=path, repo=repo,
+                uid=uid, method=method.upper(), path=path,
+                norm_path=norm_path, repo=repo,
+                request_dto=request_dto or '',
+                response_dto=response_dto or '',
             )
             if handler_class_id:
                 session.run(
@@ -92,13 +111,18 @@ class Neo4jClient:
 
     def upsert_http_call(self, method: str, path: str, caller_class_id: str | None, repo: str) -> None:
         uid = f'call::{repo}::{method.upper()}::{path}'
+        norm_path = normalize_route(path)
         with self._driver.session() as session:
             session.run(
                 '''
                 MERGE (h:HttpCall {id: $uid})
-                SET h.method = $method, h.path = $path, h.repo = $repo
+                SET h.method = $method,
+                    h.path = $path,
+                    h.normalized_path = $norm_path,
+                    h.repo = $repo
                 ''',
-                uid=uid, method=method.upper(), path=path, repo=repo,
+                uid=uid, method=method.upper(), path=path,
+                norm_path=norm_path, repo=repo,
             )
             if caller_class_id:
                 session.run(
@@ -108,6 +132,21 @@ class Neo4jClient:
                     ''',
                     hid=uid, cid=caller_class_id,
                 )
+
+    def upsert_unresolved_dependency(self, name: str, dep_type: str, context: str, source_class_id: str) -> None:
+        """Create an UnresolvedDependency node for dead ends in the dependency chain."""
+        uid = f'unresolved::{name}'
+        with self._driver.session() as session:
+            session.run(
+                '''
+                MERGE (u:UnresolvedDependency {id: $uid})
+                SET u.name = $name, u.dep_type = $dep_type, u.context = $context
+                WITH u
+                MATCH (c:Class {id: $cid})
+                MERGE (c)-[:DEPENDS_ON_EXTERNAL]->(u)
+                ''',
+                uid=uid, name=name, dep_type=dep_type, context=context, cid=source_class_id,
+            )
 
     def link_dependencies(self, class_id: str, dep_names: list[str], repo: str) -> None:
         """Create DEPENDS_ON edges between a class and its injected dependencies by name."""
@@ -123,22 +162,39 @@ class Neo4jClient:
                 )
 
     def link_http_calls_to_endpoints(self) -> int:
-        """Match HttpCall nodes to Endpoint nodes by method + path and create RESOLVES_TO edges."""
+        """
+        Match HttpCall nodes to Endpoint nodes using normalised routes and create
+        RESOLVES_TO edges with evidence contract metadata (match quality, confidence).
+        """
         with self._driver.session() as session:
-            result = session.run(
-                '''
-                MATCH (h:HttpCall), (e:Endpoint)
-                WHERE h.method = e.method AND (
-                    e.path = h.path OR
-                    e.path ENDS WITH h.path OR
-                    h.path ENDS WITH e.path
-                )
-                MERGE (h)-[:RESOLVES_TO]->(e)
-                RETURN count(*) AS linked
-                '''
-            )
-            record = result.single()
-            return record['linked'] if record else 0
+            # Pull all http calls and endpoints into Python for normalised comparison
+            calls = session.run('MATCH (h:HttpCall) RETURN h.id AS id, h.method AS method, h.path AS path, h.normalized_path AS norm_path').data()
+            endpoints = session.run('MATCH (e:Endpoint) RETURN e.id AS id, e.method AS method, e.path AS path, e.normalized_path AS norm_path').data()
+
+        linked = 0
+        with self._driver.session() as session:
+            for call in calls:
+                for ep in endpoints:
+                    if call['method'] != ep['method']:
+                        continue
+                    call_norm = call.get('norm_path') or normalize_route(call.get('path') or '')
+                    ep_norm = ep.get('norm_path') or normalize_route(ep.get('path') or '')
+                    matched, match_quality = routes_match(call_norm, ep_norm)
+                    if matched:
+                        confidence = {'exact': 1.0, 'template': 0.85, 'prefix': 0.6}.get(match_quality, 0.4)
+                        session.run(
+                            '''
+                            MATCH (h:HttpCall {id: $hid}), (e:Endpoint {id: $eid})
+                            MERGE (h)-[r:RESOLVES_TO]->(e)
+                            SET r.match_quality = $match_quality,
+                                r.confidence = $confidence
+                            ''',
+                            hid=call['id'], eid=ep['id'],
+                            match_quality=match_quality,
+                            confidence=confidence,
+                        )
+                        linked += 1
+        return linked
 
     # ------------------------------------------------------------------
     # Queries
